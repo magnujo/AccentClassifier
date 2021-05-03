@@ -38,4 +38,3 @@ print(distinct_accents)
 label_binarizer = LabelBinarizer().fit_transform(df_accent["accent"])
 
 print(label_binarizer)
-
