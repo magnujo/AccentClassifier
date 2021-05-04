@@ -5,6 +5,8 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 from sklearn.preprocessing import LabelBinarizer
 
+from test import extract
+
 df = pd.read_csv(Path().joinpath("data", "validated.tsv"), sep="\t")
 
 
@@ -34,8 +36,14 @@ df_accent.describe()
 distinct_accents = df_accent["accent"].unique()
 print(distinct_accents)
 
+lb = LabelBinarizer()
 
-label_binarizer = LabelBinarizer().fit_transform(df_accent["accent"])
+label_binarizer = lb.fit_transform(df_accent["accent"])
+
+
 
 print(label_binarizer)
+print(len(df_accent))
+
+#extract(df_accent["path"].tolist())
 

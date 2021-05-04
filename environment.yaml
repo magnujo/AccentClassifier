@@ -13,3 +13,4 @@ dependencies:
     - matplotlib
     - opencv-python
     - seaborn
+    - pydub
