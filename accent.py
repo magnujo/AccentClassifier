@@ -40,10 +40,5 @@ lb = LabelBinarizer()
 
 label_binarizer = lb.fit_transform(df_accent["accent"])
 
-
-
 print(label_binarizer)
-print(len(df_accent))
-
-#extract(df_accent["path"].tolist())
 
