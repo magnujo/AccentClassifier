@@ -10,9 +10,7 @@ from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.keras import layers
 from tensorflow.keras import models
 import tensorflow_io as tfio
-os.environ['TF_XLA_FLAGS'] = '--tf_xla_enable_xla_devices'
-os.environ['TF_CPP_VMODULE'] = 'asm_compiler=3'
-os.environ['CUDA_CACHE_MAXSIZE'] = '2147483648'
+
 df = pd.read_csv(r"D:\data_small\df_accent_small.csv")
 
 # unique = df["accent"].unique()
