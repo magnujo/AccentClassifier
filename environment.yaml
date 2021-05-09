@@ -3,7 +3,6 @@ channels:
 
 dependencies:
   - python=3.7.3
-  - tensorflow-gpu
   - pip
   - pip:
     - jupyter
@@ -14,3 +13,5 @@ dependencies:
     - opencv-python
     - seaborn
     - pydub
+    - tensorflow
+    - tensorflow_io

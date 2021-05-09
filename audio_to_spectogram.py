@@ -1,4 +1,4 @@
-#Most of this is from https://www.tensorflow.org/tutorials/audio/simple_audio
+# Most of this is from https://www.tensorflow.org/tutorials/audio/simple_audio
 
 # %%
 import os
@@ -9,14 +9,12 @@ import numpy as np
 import seaborn as sns
 import tensorflow as tf
 
-from tensorflow.keras.layers.experimental import preprocessing
-from tensorflow.keras import layers
-from tensorflow.keras import models
 from IPython import display
 
+
 # %%
-#from https://www.tensorflow.org/tutorials/audio/simple_audio
-#converts the binary wav file to a tensor waveform
+# from https://www.tensorflow.org/tutorials/audio/simple_audio
+# converts the binary wav file to a tensor waveform
 def decode_audio(file_path):
     audio_binary = tf.io.read_file(file_path)
     audio, _ = tf.audio.decode_wav(audio_binary)
@@ -32,6 +30,8 @@ med (1sekund-længden af lydfilen)), hvilket fucker op hvis filerne er over 1 se
 som den ikke kan finde ud af. 
 Men hvordan finder vi ud af hvor lang den længste fil er? 
 '''
+
+
 def get_spectrogram(waveform):
     # Padding for files with less than 16000 samples
     zero_padding = tf.zeros([16000] - tf.shape(waveform), dtype=tf.float32)
@@ -39,7 +39,7 @@ def get_spectrogram(waveform):
     # Concatenate audio with padding so that all audio clips will be of the
     # same length
     waveform = tf.cast(waveform, tf.float32)
-    #equal_length = tf.concat([waveform, zero_padding], 0)
+    # equal_length = tf.concat([waveform, zero_padding], 0)
     equal_length = tf.concat([waveform], 0)
     spectrogram = tf.signal.stft(
         equal_length, frame_length=255, frame_step=128)
@@ -49,19 +49,18 @@ def get_spectrogram(waveform):
     return spectrogram
 
 
-
-
-
-#%%
-#Creates a audio player (only works in jupiter possibly)
+# %%
+data_dir = Path('D:\data_small\cv-corpus-6.1-2020-12-11\en\wav')
+wf = decode_audio(str(data_dir.resolve()) + "\\common_voice_en_37811.wav")
+# Creates a audio player (only works in jupiter possibly)
 display.display(display.Audio(wf, rate=16000))
 
-#%%
-data_dir = Path('data/audio_files')
+# %%
+data_dir = Path('D:\data_small\cv-corpus-6.1-2020-12-11\en\wav')
 print(data_dir.resolve())
 
-#%%
-#Filerne ligges i ./data/audio_files
+# %%
+# Filerne ligges i ./data/audio_files
 wf = decode_audio(str(data_dir.resolve()) + "\\common_voice_en_39978.wav")
 print(wf)
 print("length")
@@ -69,32 +68,33 @@ print(tf.shape(wf))
 plt.plot(wf)
 plt.show()
 
-#%%
+# %%
 filenames = tf.io.gfile.glob(str(data_dir) + "/*.wav")
 filenames = tf.random.shuffle(filenames)
 
 print(filenames)
 
-#%%
+# %%
 spectrogram = get_spectrogram(wf)
 
-#%%
+
+# %%
 def plot_spectrogram(spectrogram, ax):
-  # Convert to frequencies to log scale and transpose so that the time is
-  # represented in the x-axis (columns).
-  log_spec = np.log(spectrogram.T)
-  height = log_spec.shape[0]
-  width = log_spec.shape[1]
-  X = np.linspace(0, np.size(spectrogram), num=width, dtype=int)
-  Y = range(height)
-  ax.pcolormesh(X, Y, log_spec)
+    # Convert to frequencies to log scale and transpose so that the time is
+    # represented in the x-axis (columns).
+    log_spec = np.log(spectrogram.T)
+    height = log_spec.shape[0]
+    width = log_spec.shape[1]
+    X = np.linspace(0, np.size(spectrogram), num=width, dtype=int)
+    Y = range(height)
+    ax.pcolormesh(X, Y, log_spec)
 
 
 fig, axes = plt.subplots(2, figsize=(12, 8))
 timescale = np.arange(wf.shape[0])
 axes[0].plot(timescale, wf.numpy())
 axes[0].set_title('Waveform')
-#axes[0].set_xlim([0, 16000])
+# axes[0].set_xlim([0, 16000])
 plot_spectrogram(spectrogram.numpy(), axes[1])
 axes[1].set_title('Spectrogram')
 plt.show()
