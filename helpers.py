@@ -19,7 +19,7 @@ def clean_binarize(dataframe, focus_col, values_to_remove=["other"]):
 def get_info(dataframe, focus_col):
     df = dataframe[["path", focus_col]]
     df = df.dropna()
-    print(df.shape[1])
+    print(df.shape[0])
     print(df[focus_col].unique())
     print(df[focus_col].value_counts())
     sns.countplot(y=focus_col, data=df)
