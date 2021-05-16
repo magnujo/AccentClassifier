@@ -24,11 +24,11 @@ def decode_audio(file_path):
 # %%
 '''
 Den her er mærkelig med dens zero_padding. Hvis zero padding er slået til får man exception.
-Vi skal finde ud af hvor lang det længste lydklip er og så padde resten så de 
-blive lige så lange. Lige nu padder den ud fra at alle filer er <1 sekund (16000 zeros) (så den padder 
+Vi skal finde ud af hvor lang det længste lydklip er og så padde resten så de
+blive lige så lange. Lige nu padder den ud fra at alle filer er <1 sekund (16000 zeros) (så den padder
 med (1sekund-længden af lydfilen)), hvilket fucker op hvis filerne er over 1 sekund da det giver en minus padding,
-som den ikke kan finde ud af. 
-Men hvordan finder vi ud af hvor lang den længste fil er? 
+som den ikke kan finde ud af.
+Men hvordan finder vi ud af hvor lang den længste fil er?
 '''
 
 
