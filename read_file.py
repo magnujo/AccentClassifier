@@ -10,7 +10,7 @@ def extract(files_to_extract):
             if last[len(last) - 1] in files_to_extract:
                 count += 1
                 print(f"Found file. Count: {count} / {len(files_to_extract)}")
-                archive.extract(member, path=r"D:\data_small")
+                archive.extract(member, path=r"I:\Gender")
                 print(f"Finished {last}")
 
     print("done")

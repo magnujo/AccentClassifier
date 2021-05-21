@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelBinarizer
 import tensorflow as tf
 import matplotlib.pyplot as plt
@@ -10,11 +11,17 @@ from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.keras import layers
 from tensorflow.keras import models
 import tensorflow_io as tfio
+import tensorflow_datasets as tfds
+import logging
 
-df = pd.read_csv(r"D:\data_small\df_accent_small.csv")
+logging.basicConfig(filename='training.log', level=logging.DEBUG)
+from tfx import tools
+
+df = pd.read_csv(r"D:\data\cv-corpus-6.1-2020-12-11\en\df_accent.csv")
+df = df.sample(frac=1).reset_index(drop=True)
 
 # unique = df["accent"].unique()
-path = Path(r"D:\data_small\cv-corpus-6.1-2020-12-11\en\wav")
+path = Path(r"D:\data\cv-corpus-6.1-2020-12-11\en\wav")
 df["path"] = df["path"].apply(lambda x: str(path.joinpath(x.replace("mp3", "wav"))))
 df = df.sample(frac=1)
 
@@ -26,6 +33,11 @@ ohe_df = pd.DataFrame(transformed)
 X_features = df["path"].to_numpy()
 Y_labels = ohe_df.to_numpy()
 
+X_train, X_test, Y_train, Y_test = train_test_split(X_features, Y_labels, train_size=0.7, test_size=0.15)
+_, X_val, _, Y_val = train_test_split(X_features, Y_labels, train_size=0.7, test_size=0.15)
+
+
+AUTOTUNE = tf.data.experimental.AUTOTUNE
 
 def decode_audio(audio_binary):
     audio, _ = tf.audio.decode_wav(audio_binary)
@@ -38,22 +50,52 @@ def get_wav_and_label(file_name: tf.string, label):
     wav = decode_audio(audio_binary)
     return wav, label
 
+X_all = tf.convert_to_tensor(X_features, dtype=tf.string)
+Y_all = tf.convert_to_tensor(Y_labels, dtype=tf.float32)
 
-X_features = tf.convert_to_tensor(X_features, dtype=tf.string)
-Y_labels = tf.convert_to_tensor(Y_labels, dtype=tf.float32)
+X_train = tf.convert_to_tensor(X_train, dtype=tf.string)
+Y_train = tf.convert_to_tensor(Y_train, dtype=tf.float32)
 
-X_features_ds = tf.data.Dataset.from_tensor_slices(X_features)
-Y_labels_ds = tf.data.Dataset.from_tensor_slices(Y_labels)
+X_test = tf.convert_to_tensor(X_test, dtype=tf.string)
+Y_test = tf.convert_to_tensor(Y_test, dtype=tf.float32)
 
-AUTOTUNE = tf.data.experimental.AUTOTUNE
-files_ds = tf.data.Dataset.zip((X_features_ds, Y_labels_ds))
-waveform_ds = files_ds.map(get_wav_and_label, num_parallel_calls=AUTOTUNE)
+X_val = tf.convert_to_tensor(X_val, dtype=tf.string)
+Y_val = tf.convert_to_tensor(Y_val, dtype=tf.float32)
 
+X_all_ds = tf.data.Dataset.from_tensor_slices(X_all)
+Y_all_ds = tf.data.Dataset.from_tensor_slices(Y_all)
+
+X_train_ds = tf.data.Dataset.from_tensor_slices(X_train)
+Y_train_ds = tf.data.Dataset.from_tensor_slices(Y_train)
+
+X_test_ds = tf.data.Dataset.from_tensor_slices(X_test)
+Y_test_ds = tf.data.Dataset.from_tensor_slices(Y_test)
+
+X_val_ds = tf.data.Dataset.from_tensor_slices(X_val)
+Y_val_ds = tf.data.Dataset.from_tensor_slices(Y_val)
+
+
+files_train_ds = tf.data.Dataset.zip((X_train_ds, Y_train_ds))
+files_test_ds = tf.data.Dataset.zip((X_test_ds, Y_test_ds))
+files_val_ds = tf.data.Dataset.zip((X_val_ds, Y_val_ds))
+
+files_all_ds = tf.data.Dataset.zip((X_all_ds, Y_all_ds))
+
+waveform_all_ds = files_all_ds.map(get_wav_and_label, num_parallel_calls=AUTOTUNE)
+waveform_train_ds = files_train_ds.map(get_wav_and_label, num_parallel_calls=AUTOTUNE)
+waveform_test_ds = files_test_ds.map(get_wav_and_label, num_parallel_calls=AUTOTUNE)
+waveform_val_ds = files_val_ds.map(get_wav_and_label, num_parallel_calls=AUTOTUNE)
+
+print("Finding Max padding")
+shapes = tfds.as_numpy(waveform_all_ds.map(lambda x, _: tf.shape(x), num_parallel_calls=AUTOTUNE))
+
+max_padding_size = 0
+for w in shapes:
+    max_padding_size = max(max_padding_size, w[0])
+print("End Finding Max padding")
 
 def get_spectrogram(waveform):
-
-    #waveform = tf.cast(waveform, tf.float32)
-    #waveform = add_padding(waveform)
+    waveform = add_padding(waveform)
     spectrogram = tfio.experimental.audio.spectrogram(waveform, nfft=512, window=512, stride=256)
     # spectrogram = tfio.experimental.audio.melscale(spectrogram, rate=16000, mels=128, fmin=0, fmax=8000)
     spectrogram = tf.abs(spectrogram)
@@ -61,7 +103,8 @@ def get_spectrogram(waveform):
 
 
 def add_padding(waveform):
-    zero_padding = tf.zeros([200000] - tf.shape(waveform), dtype=tf.float32)
+    waveform = tf.cast(waveform, tf.float32)
+    zero_padding = tf.zeros([max_padding_size] - tf.shape(waveform), dtype=tf.float32)
     return tf.concat([waveform, zero_padding], 0)
 
 
@@ -83,21 +126,22 @@ def plot_spectrogram(spectrogram, ax):
     ax.pcolormesh(X, Y, log_spec)
 
 
-for waveform, label in waveform_ds.take(1):
-    label = label.numpy()
-    print(label.shape)
-    label = jobs_encoder.inverse_transform(np.array([label]))[0]
-    spectrogram = get_spectrogram(waveform)
+# for waveform, label in waveform_ds.take(1):
+#     label = label.numpy()
+#     label = jobs_encoder.inverse_transform(np.array([label]))[0]
+#     spectrogram = get_spectrogram(waveform)
+#
+# fig, axes = plt.subplots(2, figsize=(12, 8))
+# timescale = np.arange(waveform.shape[0])
+# axes[0].plot(timescale, waveform.numpy())
+# axes[0].set_title('Waveform')
+# plot_spectrogram(spectrogram.numpy(), axes[1])
+# axes[1].set_title('Spectrogram')
+# plt.show()
 
-fig, axes = plt.subplots(2, figsize=(12, 8))
-timescale = np.arange(waveform.shape[0])
-axes[0].plot(timescale, waveform.numpy())
-axes[0].set_title('Waveform')
-plot_spectrogram(spectrogram.numpy(), axes[1])
-axes[1].set_title('Spectrogram')
-plt.show()
-
-spectrogram_ds = waveform_ds.map(get_spectrogram_and_label_id, num_parallel_calls=AUTOTUNE)
+spectrogram_train_ds = waveform_train_ds.map(get_spectrogram_and_label_id, num_parallel_calls=AUTOTUNE)
+spectrogram_test_ds = waveform_test_ds.map(get_spectrogram_and_label_id, num_parallel_calls=AUTOTUNE)
+spectrogram_val_ds = waveform_val_ds.map(get_spectrogram_and_label_id, num_parallel_calls=AUTOTUNE)
 
 
 def split_dataset(full_ds, train_size, test_size):
@@ -109,7 +153,7 @@ def split_dataset(full_ds, train_size, test_size):
     return ds_train, ds_val, ds_test
 
 
-BATCH_SIZE = 32
+BATCH_SIZE = 1024
 
 DATASET_SIZE = len(X_features)
 
@@ -121,30 +165,34 @@ steps_per_epoch = train_size // BATCH_SIZE
 validation_steps = val_size // BATCH_SIZE
 test_steps = test_size // BATCH_SIZE
 
+
+logging.info("Normalization")
 norm_layer = preprocessing.Normalization()
-norm_layer.adapt(spectrogram_ds.map(lambda x, _: x))
+norm_layer.adapt(spectrogram_train_ds.map(lambda x, _: x, num_parallel_calls=AUTOTUNE))
 
-ds_train, ds_val, ds_test = split_dataset(spectrogram_ds, train_size, test_size)
-
-input_shape = next(iter(ds_train.take(1)))[0].shape
+input_shape = next(iter(spectrogram_train_ds.take(1)))[0].shape
 
 num_labels = len(jobs_encoder.classes_)
 
-ds_train = ds_train.batch(BATCH_SIZE).cache().prefetch(AUTOTUNE).shuffle(1000)
-ds_val = ds_val.batch(BATCH_SIZE).cache().prefetch(AUTOTUNE).shuffle(1000)
-ds_test = ds_test.batch(BATCH_SIZE).cache().prefetch(AUTOTUNE).shuffle(1000)
-
+logging.info("Final Touches")
+ds_train = spectrogram_train_ds.cache().shuffle(100).batch(BATCH_SIZE).prefetch(AUTOTUNE)
+ds_val = spectrogram_val_ds.cache().shuffle(100).batch(BATCH_SIZE).prefetch(AUTOTUNE)
+ds_test = spectrogram_test_ds.cache().shuffle(100).batch(BATCH_SIZE).prefetch(AUTOTUNE)
 
 model = models.Sequential([
     layers.Input(shape=input_shape),
     norm_layer,
     layers.Conv2D(32, 3, activation='relu'),
+    layers.MaxPooling2D(),
     layers.Conv2D(64, 3, activation='relu'),
     layers.MaxPooling2D(),
     layers.Dropout(0.25),
     layers.Flatten(),
-    layers.Dense(128, activation='relu'),
-    layers.Dropout(0.5),
+    layers.Dense(256, activation='relu'),
+    layers.Dropout(0.2),
+    layers.Dense(64, activation='relu'),
+    layers.BatchNormalization(),
+    layers.Dense(32, activation='sigmoid'),
     layers.Dense(num_labels, activation="softmax"),
 ])
 
@@ -154,10 +202,17 @@ model.compile(
     metrics=['accuracy'],
 )
 
-EPOCHS = 10
+EPOCHS = 20
+logging.info("Starting Training")
 history = model.fit(
     ds_train,
     validation_data=ds_val,
     epochs=EPOCHS,
-    # callbacks=tf.keras.callbacks.EarlyStopping(verbose=1, patience=2),
 )
+
+model.save("data/model_with_padding.h5")
+loss, acc = model.evaluate(ds_test, verbose=2)
+print(loss)
+print(acc)
+logging.info(f"Loss: {loss}")
+logging.info(f"Acc: {acc}")
