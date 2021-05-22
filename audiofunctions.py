@@ -35,6 +35,16 @@ def draw_amplitude_distribution(audio_data_dir_path: str):
 
 
 '''
+Da der ikke er plads til intervallerne på x-asken bliver tegningen lidt rodet
+'''
+
+def draw_frequency_distribution(audio_data_dir_path: str, n_bins):
+    freq_array = collect_all_amplitudes_of_frequencies(audio_data_dir_path)
+    plot_array_of_freq_amps(freq_array, n_bins)
+
+
+
+'''
 Goes through a folder of audio files and sums up all the amplitudes of the different frequencies (seems like its usually
 from 0hz - 257hz. Maybe it is just fixed to 257 and then the files that have higher frequencies are compressed/filtered?
 Needs to be tested on more files). All of the frequency amplitudes of mp3 files are apparently negative, 
@@ -115,3 +125,6 @@ def plot_array_of_freq_amps2(x, n_bins):
         d[i] = b[i]
     print("d", d)
     return d
+
+
+
