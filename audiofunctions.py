@@ -1,3 +1,4 @@
+
 from pathlib import Path
 import numpy as np
 import tensorflow as tf
@@ -31,6 +32,16 @@ def draw_amplitude_distribution(audio_data_dir_path: str):
     amplitudes = collect_all_amplitudes(audio_data_dir_path)
     plt.hist(amplitudes, bins=15, edgecolor="Black", log=True)
     plt.show()
+
+
+'''
+Da der ikke er plads til intervallerne på x-asken bliver tegningen lidt rodet
+'''
+
+def draw_frequency_distribution(audio_data_dir_path: str, n_bins):
+    freq_array = collect_all_amplitudes_of_frequencies(audio_data_dir_path)
+    plot_array_of_freq_amps(freq_array, n_bins)
+
 
 
 '''
@@ -96,6 +107,7 @@ def plot_array_of_freq_amps(x, n_bins):
     return d
 
 
+
 '''
 Plotting with i on the x axis 
 '''
@@ -119,3 +131,7 @@ if __name__ == "__main__":
     draw_amplitude_distribution(r"D:\data_small\cv-corpus-6.1-2020-12-11\en\wav")
 
     print("finish")
+
+
+
+
