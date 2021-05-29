@@ -6,23 +6,26 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelBinarizer
 import tensorflow as tf
-import matplotlib.pyplot as plt
 from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.keras import layers
 from tensorflow.keras import models
 import tensorflow_io as tfio
-import tensorflow_datasets as tfds
 import logging
 
-logging.basicConfig(filename='training.log', level=logging.DEBUG)
-from tfx import tools
+def make_path(path, x):
+    with_part = path.joinpath(x.part)
+    return str(Path(with_part, x.path.replace("mp3", "wav")))
 
-df = pd.read_csv(r"D:\data\cv-corpus-6.1-2020-12-11\en\df_accent.csv")
+gpus = tf.config.experimental.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(gpus[0], True)
+logging.basicConfig(filename='training.log', level=logging.DEBUG)
+
+df = pd.read_csv(r"I:\accent_cleaned\df_accent.csv")
 df = df.sample(frac=1).reset_index(drop=True)
 
 # unique = df["accent"].unique()
-path = Path(r"D:\data\cv-corpus-6.1-2020-12-11\en\wav")
-df["path"] = df["path"].apply(lambda x: str(path.joinpath(x.replace("mp3", "wav"))))
+path = Path(r"I:\accent_cleaned\cv-corpus-6.1-2020-12-11\en")
+df["path"] = df.apply(lambda x: make_path(path, x), axis=1)
 df = df.sample(frac=1)
 
 jobs_encoder = LabelBinarizer()
@@ -30,14 +33,15 @@ jobs_encoder.fit(df['accent'])
 transformed = jobs_encoder.transform(df['accent'])
 ohe_df = pd.DataFrame(transformed)
 
+
 X_features = df["path"].to_numpy()
 Y_labels = ohe_df.to_numpy()
 
 X_train, X_test, Y_train, Y_test = train_test_split(X_features, Y_labels, train_size=0.7, test_size=0.15)
 _, X_val, _, Y_val = train_test_split(X_features, Y_labels, train_size=0.7, test_size=0.15)
 
-
 AUTOTUNE = tf.data.experimental.AUTOTUNE
+
 
 def decode_audio(audio_binary):
     audio, _ = tf.audio.decode_wav(audio_binary)
@@ -49,6 +53,7 @@ def get_wav_and_label(file_name: tf.string, label):
     audio_binary = tf.io.read_file(file_name)
     wav = decode_audio(audio_binary)
     return wav, label
+
 
 X_all = tf.convert_to_tensor(X_features, dtype=tf.string)
 Y_all = tf.convert_to_tensor(Y_labels, dtype=tf.float32)
@@ -74,7 +79,6 @@ Y_test_ds = tf.data.Dataset.from_tensor_slices(Y_test)
 X_val_ds = tf.data.Dataset.from_tensor_slices(X_val)
 Y_val_ds = tf.data.Dataset.from_tensor_slices(Y_val)
 
-
 files_train_ds = tf.data.Dataset.zip((X_train_ds, Y_train_ds))
 files_test_ds = tf.data.Dataset.zip((X_test_ds, Y_test_ds))
 files_val_ds = tf.data.Dataset.zip((X_val_ds, Y_val_ds))
@@ -86,26 +90,12 @@ waveform_train_ds = files_train_ds.map(get_wav_and_label, num_parallel_calls=AUT
 waveform_test_ds = files_test_ds.map(get_wav_and_label, num_parallel_calls=AUTOTUNE)
 waveform_val_ds = files_val_ds.map(get_wav_and_label, num_parallel_calls=AUTOTUNE)
 
-print("Finding Max padding")
-shapes = tfds.as_numpy(waveform_all_ds.map(lambda x, _: tf.shape(x), num_parallel_calls=AUTOTUNE))
-
-max_padding_size = 0
-for w in shapes:
-    max_padding_size = max(max_padding_size, w[0])
-print("End Finding Max padding")
 
 def get_spectrogram(waveform):
-    waveform = add_padding(waveform)
-    spectrogram = tfio.experimental.audio.spectrogram(waveform, nfft=512, window=512, stride=256)
+    spectrogram = tfio.audio.spectrogram(waveform, nfft=512, window=512, stride=256)
     # spectrogram = tfio.experimental.audio.melscale(spectrogram, rate=16000, mels=128, fmin=0, fmax=8000)
     spectrogram = tf.abs(spectrogram)
     return spectrogram
-
-
-def add_padding(waveform):
-    waveform = tf.cast(waveform, tf.float32)
-    zero_padding = tf.zeros([max_padding_size] - tf.shape(waveform), dtype=tf.float32)
-    return tf.concat([waveform, zero_padding], 0)
 
 
 def get_spectrogram_and_label_id(audio, label):
@@ -125,20 +115,6 @@ def plot_spectrogram(spectrogram, ax):
     Y = range(height)
     ax.pcolormesh(X, Y, log_spec)
 
-
-# for waveform, label in waveform_ds.take(1):
-#     label = label.numpy()
-#     label = jobs_encoder.inverse_transform(np.array([label]))[0]
-#     spectrogram = get_spectrogram(waveform)
-#
-# fig, axes = plt.subplots(2, figsize=(12, 8))
-# timescale = np.arange(waveform.shape[0])
-# axes[0].plot(timescale, waveform.numpy())
-# axes[0].set_title('Waveform')
-# plot_spectrogram(spectrogram.numpy(), axes[1])
-# axes[1].set_title('Spectrogram')
-# plt.show()
-
 spectrogram_train_ds = waveform_train_ds.map(get_spectrogram_and_label_id, num_parallel_calls=AUTOTUNE)
 spectrogram_test_ds = waveform_test_ds.map(get_spectrogram_and_label_id, num_parallel_calls=AUTOTUNE)
 spectrogram_val_ds = waveform_val_ds.map(get_spectrogram_and_label_id, num_parallel_calls=AUTOTUNE)
@@ -153,7 +129,7 @@ def split_dataset(full_ds, train_size, test_size):
     return ds_train, ds_val, ds_test
 
 
-BATCH_SIZE = 1024
+BATCH_SIZE = 512
 
 DATASET_SIZE = len(X_features)
 
@@ -165,7 +141,6 @@ steps_per_epoch = train_size // BATCH_SIZE
 validation_steps = val_size // BATCH_SIZE
 test_steps = test_size // BATCH_SIZE
 
-
 logging.info("Normalization")
 norm_layer = preprocessing.Normalization()
 norm_layer.adapt(spectrogram_train_ds.map(lambda x, _: x, num_parallel_calls=AUTOTUNE))
@@ -175,9 +150,9 @@ input_shape = next(iter(spectrogram_train_ds.take(1)))[0].shape
 num_labels = len(jobs_encoder.classes_)
 
 logging.info("Final Touches")
-ds_train = spectrogram_train_ds.cache().shuffle(100).batch(BATCH_SIZE).prefetch(AUTOTUNE)
-ds_val = spectrogram_val_ds.cache().shuffle(100).batch(BATCH_SIZE).prefetch(AUTOTUNE)
-ds_test = spectrogram_test_ds.cache().shuffle(100).batch(BATCH_SIZE).prefetch(AUTOTUNE)
+ds_train = spectrogram_train_ds.cache().batch(BATCH_SIZE).prefetch(AUTOTUNE)
+ds_val = spectrogram_val_ds.cache().batch(BATCH_SIZE).prefetch(AUTOTUNE)
+ds_test = spectrogram_test_ds.cache().batch(BATCH_SIZE).prefetch(AUTOTUNE)
 
 model = models.Sequential([
     layers.Input(shape=input_shape),
@@ -198,7 +173,7 @@ model = models.Sequential([
 
 model.compile(
     optimizer=tf.keras.optimizers.Adam(),
-    loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True),
+    loss=tf.keras.losses.CategoricalCrossentropy(),
     metrics=['accuracy'],
 )
 

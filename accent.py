@@ -25,7 +25,7 @@ df_accent = df_accent[df_accent.accent != "other"]
 # %%
 
 sns.countplot(y="accent", data=df_accent)
-#plt.show()
+plt.show()
 df_accent.accent.value_counts()
 
 # %%

@@ -1,10 +1,8 @@
-
 from pathlib import Path
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import tensorflow_io as tfio
-
 
 
 def collect_all_amplitudes(audio_data_dir_path: str):
@@ -28,6 +26,7 @@ def collect_all_amplitudes(audio_data_dir_path: str):
 Takes a path to an audio folder, and draws a histogram of the distribution of amplitudes across all the audio files.
 '''
 
+
 def draw_amplitude_distribution(audio_data_dir_path: str):
     amplitudes = collect_all_amplitudes(audio_data_dir_path)
     plt.hist(amplitudes, bins=15, edgecolor="Black", log=True)
@@ -39,7 +38,7 @@ Goes through a folder of audio files and sums up all the amplitudes of the diffe
 from 0hz - 257hz. Maybe it is just fixed to 257 and then the files that have higher frequencies are compressed/filtered?
 Needs to be tested on more files). All of the frequency amplitudes of mp3 files are apparently negative, 
 and some of the wavs are also. Does this make sense? Might want to change the spectogram generation method
-to something similar to test.py method.
+to something similar to train_with_padding.py method.
 
 '''
 
@@ -97,7 +96,6 @@ def plot_array_of_freq_amps(x, n_bins):
     return d
 
 
-
 '''
 Plotting with i on the x axis 
 '''
@@ -115,3 +113,9 @@ def plot_array_of_freq_amps2(x, n_bins):
         d[i] = b[i]
     print("d", d)
     return d
+
+
+if __name__ == "__main__":
+    draw_amplitude_distribution(r"D:\data_small\cv-corpus-6.1-2020-12-11\en\wav")
+
+    print("finish")
