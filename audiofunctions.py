@@ -73,6 +73,21 @@ def collect_all_amplitudes_of_frequencies(audio_data_dir_path: str):
 
     return final
 
+'''
+    Sums up the amplitudes of frequencies of a single file, and returns it as an array where the index is the frequency. For example
+    sum_of_freqamps[1] = sum of 1hz amplitudes
+'''
+def single_freq_hist(file_path: str):
+    path_in_str = file_path
+    audio = tfio.audio.AudioIOTensor(path_in_str)
+    audio_tensor = tf.squeeze(audio.to_tensor(), axis=[-1])
+    tensor = tf.cast(audio_tensor, tf.float32)
+    spectrogram = tfio.audio.spectrogram(tensor, nfft=512, window=512, stride=256)
+    spectrogram = tf.math.log(spectrogram).numpy()
+    spectrogram = np.where(spectrogram == float("-inf"), 0, spectrogram)  # replaces -inf with 0, so the below sum works.
+    sum_of_freqamps = np.sum(spectrogram, axis=0)  # Sums up the frequency amplitudes
+    return sum_of_freqamps
+
 
 def add_arrays_of_different_size(a, b):
     if len(a) == 0:
