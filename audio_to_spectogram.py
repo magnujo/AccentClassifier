@@ -34,7 +34,7 @@ Men hvordan finder vi ud af hvor lang den længste fil er?
 
 def get_spectrogram(waveform):
     # Padding for files with less than 16000 samples
-    zero_padding = tf.zeros([16000] - tf.shape(waveform), dtype=tf.float32)
+    zero_padding = tf.zeros([53504] - tf.shape(waveform), dtype=tf.float32)
 
     # Concatenate audio with padding so that all audio clips will be of the
     # same length
@@ -51,7 +51,7 @@ def get_spectrogram(waveform):
 
 # %%
 data_dir = Path('D:\data_small\cv-corpus-6.1-2020-12-11\en\wav')
-wf = decode_audio(str(data_dir.resolve()) + "\\common_voice_en_37811.wav")
+wf = decode_audio(str(data_dir.resolve()) + "\\common_voice_en_159722.wav")
 # Creates a audio player (only works in jupiter possibly)
 display.display(display.Audio(wf, rate=16000))
 
@@ -61,7 +61,7 @@ print(data_dir.resolve())
 
 # %%
 # Filerne ligges i ./data/audio_files
-wf = decode_audio(str(data_dir.resolve()) + "\\common_voice_en_39978.wav")
+wf = decode_audio(str(data_dir.resolve()) + "\\common_voice_en_159722.wav")
 print(wf)
 print("length")
 print(tf.shape(wf))

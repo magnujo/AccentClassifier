@@ -10,19 +10,25 @@ from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.keras import layers
 from tensorflow.keras import models
 import tensorflow_io as tfio
-import tensorflow_datasets as tfds
 import logging
 
-gpus = tf.config.experimental.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(gpus[0], True)
-logging.basicConfig(filename='training.log', level=logging.DEBUG)
 
-df = pd.read_csv(r"I:\accent_cleaned\df_accent.csv")
+def make_path(path, x):
+    with_part = path.joinpath(x.part)
+    return str(Path(with_part, x.path.replace("mp3", "wav")))
+
+
+# gpus = tf.config.experimental.list_physical_devices('GPU')
+# tf.config.experimental.set_memory_growth(gpus[0], True)
+
+logging.basicConfig(filename='training_without_padding_50.log', level=logging.INFO)
+
+df = pd.read_csv(r"I:\accent_300K\df_accent.csv")
 df = df.sample(frac=1).reset_index(drop=True)
 
 # unique = df["accent"].unique()
-path = Path(r"I:\accent_cleaned\cv-corpus-6.1-2020-12-11\en\clips")
-df["path"] = df["path"].apply(lambda x: str(path.joinpath(x.replace("mp3", "wav"))))
+path = Path(r"I:\accent_300K\cv-corpus-6.1-2020-12-11\en")
+df["path"] = df.apply(lambda x: make_path(path, x), axis=1)
 df = df.sample(frac=1)
 
 jobs_encoder = LabelBinarizer()
@@ -35,12 +41,14 @@ Y_labels = ohe_df.to_numpy()
 
 X_train, X_testval, Y_train, Y_testval = train_test_split(X_features, Y_labels, train_size=0.7, test_size=0.30)
 X_test, X_val, Y_test, Y_val = train_test_split(X_testval
-                                      ,Y_testval, train_size=0.5, test_size=0.50)
+                                                , Y_testval, train_size=0.5, test_size=0.50)
 
 AUTOTUNE = tf.data.experimental.AUTOTUNE
+print("Finished Setting up paths")
 
 
 def decode_audio(audio_binary):
+
     audio, _ = tf.audio.decode_wav(audio_binary)
     audio = tf.squeeze(audio, axis=-1)
     return audio
@@ -82,32 +90,20 @@ files_val_ds = tf.data.Dataset.zip((X_val_ds, Y_val_ds))
 
 files_all_ds = tf.data.Dataset.zip((X_all_ds, Y_all_ds))
 
+
+BATCH_SIZE = 512
 waveform_all_ds = files_all_ds.map(get_wav_and_label, num_parallel_calls=AUTOTUNE)
 waveform_train_ds = files_train_ds.map(get_wav_and_label, num_parallel_calls=AUTOTUNE)
 waveform_test_ds = files_test_ds.map(get_wav_and_label, num_parallel_calls=AUTOTUNE)
 waveform_val_ds = files_val_ds.map(get_wav_and_label, num_parallel_calls=AUTOTUNE)
-
-print("Finding Max padding")
-shapes = tfds.as_numpy(waveform_all_ds.map(lambda x, _: tf.shape(x), num_parallel_calls=AUTOTUNE))
-
-max_padding_size = 0
-for w in shapes:
-    max_padding_size = max(max_padding_size, w[0])
-print("End Finding Max padding")
+print("Finished Setting up datasets")
 
 
 def get_spectrogram(waveform):
-    waveform = add_padding(waveform)
     spectrogram = tfio.audio.spectrogram(waveform, nfft=512, window=512, stride=256)
     # spectrogram = tfio.experimental.audio.melscale(spectrogram, rate=16000, mels=128, fmin=0, fmax=8000)
     spectrogram = tf.abs(spectrogram)
     return spectrogram
-
-
-def add_padding(waveform):
-    waveform = tf.cast(waveform, tf.float32)
-    zero_padding = tf.zeros([max_padding_size] - tf.shape(waveform), dtype=tf.float32)
-    return tf.concat([waveform, zero_padding], 0)
 
 
 def get_spectrogram_and_label_id(audio, label):
@@ -128,19 +124,6 @@ def plot_spectrogram(spectrogram, ax):
     ax.pcolormesh(X, Y, log_spec)
 
 
-# for waveform, label in waveform_ds.take(1):
-#     label = label.numpy()
-#     label = jobs_encoder.inverse_transform(np.array([label]))[0]
-#     spectrogram = get_spectrogram(waveform)
-#
-# fig, axes = plt.subplots(2, figsize=(12, 8))
-# timescale = np.arange(waveform.shape[0])
-# axes[0].plot(timescale, waveform.numpy())
-# axes[0].set_title('Waveform')
-# plot_spectrogram(spectrogram.numpy(), axes[1])
-# axes[1].set_title('Spectrogram')
-# plt.show()
-
 spectrogram_train_ds = waveform_train_ds.map(get_spectrogram_and_label_id, num_parallel_calls=AUTOTUNE)
 spectrogram_test_ds = waveform_test_ds.map(get_spectrogram_and_label_id, num_parallel_calls=AUTOTUNE)
 spectrogram_val_ds = waveform_val_ds.map(get_spectrogram_and_label_id, num_parallel_calls=AUTOTUNE)
@@ -154,8 +137,6 @@ def split_dataset(full_ds, train_size, test_size):
 
     return ds_train, ds_val, ds_test
 
-
-BATCH_SIZE = 256
 
 DATASET_SIZE = len(X_features)
 
@@ -176,51 +157,40 @@ input_shape = next(iter(spectrogram_train_ds.take(1)))[0].shape
 num_labels = len(jobs_encoder.classes_)
 
 logging.info("Final Touches")
-ds_train = spectrogram_train_ds.cache().batch(BATCH_SIZE).prefetch(AUTOTUNE)
-ds_val = spectrogram_val_ds.cache().batch(BATCH_SIZE).prefetch(AUTOTUNE)
-ds_test = spectrogram_test_ds.cache().batch(BATCH_SIZE).prefetch(AUTOTUNE)
+ds_train = spectrogram_train_ds.batch(BATCH_SIZE).cache().prefetch(AUTOTUNE)
+ds_val = spectrogram_val_ds.batch(BATCH_SIZE).cache().prefetch(AUTOTUNE)
 
-writer = tf.data.experimental.TFRecordWriter(r"I:\accent_cleaned\ds_train.tfrecord")
-writer.write(ds_train)
 
-writer = tf.data.experimental.TFRecordWriter(r"I:\accent_cleaned\ds_val.tfrecord")
-writer.write(ds_val)
-
-writer = tf.data.experimental.TFRecordWriter(r"I:\accent_cleaned\ds_test.tfrecord")
-writer.write(ds_test)
-
+print("Finished Everything")
 model = models.Sequential([
     layers.Input(shape=input_shape),
     norm_layer,
     layers.Conv2D(32, 3, activation='relu'),
-    layers.MaxPooling2D(),
     layers.Conv2D(64, 3, activation='relu'),
     layers.MaxPooling2D(),
-    layers.Dropout(0.25),
+    layers.Dropout(0.1),
     layers.Flatten(),
-    layers.Dense(256, activation='relu'),
-    layers.Dropout(0.2),
-    layers.Dense(64, activation='relu'),
-    layers.BatchNormalization(),
-    layers.Dense(32, activation='sigmoid'),
     layers.Dense(num_labels, activation="softmax"),
 ])
-
+print("Finished Compiling")
 model.compile(
     optimizer=tf.keras.optimizers.Adam(),
-    loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True),
+    loss=tf.keras.losses.CategoricalCrossentropy(),
     metrics=['accuracy'],
 )
 
 EPOCHS = 20
 logging.info("Starting Training")
+print("Starting Training")
 history = model.fit(
     ds_train,
     validation_data=ds_val,
     epochs=EPOCHS,
+    verbose=2,
 )
 
-model.save("data/model_with_padding.h5")
+model.save("data/model_without_padding_50.h5")
+ds_test = spectrogram_test_ds.batch(BATCH_SIZE).cache().prefetch(AUTOTUNE)
 loss, acc = model.evaluate(ds_test, verbose=2)
 print(loss)
 print(acc)
