@@ -36,7 +36,7 @@ def split_folder(path1: str, path2: str, df: DataFrame):
 
 
 if __name__ == "__main__":
-    df = pd.read_csv(r"D:\data_small\df_accent.csv")
-    split_folder(r"D:\data_small\cv-corpus-6.1-2020-12-11\en\wav",
-                 r"D:\data_small\cv-corpus-6.1-2020-12-11\en", df)
-    df.to_csv(r"D:\data_small\df_accent.csv")
+    df = pd.read_csv(r"I:\accent_300K\df_accent.csv")
+    split_folder(r"I:\accent_300K\cv-corpus-6.1-2020-12-11\en\clips",
+                 r"I:\accent_300K\cv-corpus-6.1-2020-12-11\en", df)
+    df.to_csv(r"I:\accent_300K\df_accent.csv")

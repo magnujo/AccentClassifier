@@ -17,9 +17,6 @@ def make_path(path, x):
     with_part = path.joinpath(x.part)
     return str(Path(with_part, x.path.replace("mp3", "wav")))
 
-
-gpus = tf.config.experimental.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(gpus[0], True)
 logging.basicConfig(filename='training.log', level=logging.DEBUG)
 
 df = pd.read_csv(r"D:\data_small\df_accent.csv")
@@ -39,8 +36,8 @@ ohe_df = pd.DataFrame(transformed)
 X_features = df["path"].to_numpy()
 Y_labels = ohe_df.to_numpy()
 
-X_train, X_test, Y_train, Y_test = train_test_split(X_features, Y_labels, train_size=0.7, test_size=0.15)
-_, X_val, _, Y_val = train_test_split(X_features, Y_labels, train_size=0.7, test_size=0.15)
+X_train, X_testval, Y_train, Y_testval = train_test_split(X_features, Y_labels, train_size=0.7, test_size=0.30)
+X_test, X_val, Y_test, Y_val = train_test_split(X_testval, Y_testval, train_size=0.5, test_size=0.50)
 
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 

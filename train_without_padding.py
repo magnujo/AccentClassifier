@@ -16,8 +16,9 @@ def make_path(path, x):
     with_part = path.joinpath(x.part)
     return str(Path(with_part, x.path.replace("mp3", "wav")))
 
-gpus = tf.config.experimental.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(gpus[0], True)
+# gpus = tf.config.experimental.list_physical_devices('GPU')
+# tf.config.experimental.set_memory_growth(gpus[0], True)
+
 logging.basicConfig(filename='training.log', level=logging.DEBUG)
 
 df = pd.read_csv(r"I:\accent_cleaned\df_accent.csv")
@@ -37,11 +38,12 @@ ohe_df = pd.DataFrame(transformed)
 X_features = df["path"].to_numpy()
 Y_labels = ohe_df.to_numpy()
 
-X_train, X_test, Y_train, Y_test = train_test_split(X_features, Y_labels, train_size=0.7, test_size=0.15)
-_, X_val, _, Y_val = train_test_split(X_features, Y_labels, train_size=0.7, test_size=0.15)
+X_train, X_testval, Y_train, Y_testval = train_test_split(X_features, Y_labels, train_size=0.7, test_size=0.30)
+X_test, X_val, Y_test, Y_val = train_test_split(X_testval
+                                      , Y_testval, train_size=0.5, test_size=0.50)
 
 AUTOTUNE = tf.data.experimental.AUTOTUNE
-
+print("Finished Setting up paths")
 
 def decode_audio(audio_binary):
     audio, _ = tf.audio.decode_wav(audio_binary)
@@ -84,12 +86,12 @@ files_test_ds = tf.data.Dataset.zip((X_test_ds, Y_test_ds))
 files_val_ds = tf.data.Dataset.zip((X_val_ds, Y_val_ds))
 
 files_all_ds = tf.data.Dataset.zip((X_all_ds, Y_all_ds))
-
+BATCH_SIZE = 512
 waveform_all_ds = files_all_ds.map(get_wav_and_label, num_parallel_calls=AUTOTUNE)
-waveform_train_ds = files_train_ds.map(get_wav_and_label, num_parallel_calls=AUTOTUNE)
-waveform_test_ds = files_test_ds.map(get_wav_and_label, num_parallel_calls=AUTOTUNE)
-waveform_val_ds = files_val_ds.map(get_wav_and_label, num_parallel_calls=AUTOTUNE)
-
+waveform_train_ds = files_train_ds.shuffle(1000).batch(BATCH_SIZE).map(get_wav_and_label, num_parallel_calls=AUTOTUNE)
+waveform_test_ds = files_test_ds.batch(BATCH_SIZE).map(get_wav_and_label, num_parallel_calls=AUTOTUNE)
+waveform_val_ds = files_val_ds.shuffle(1000).batch(BATCH_SIZE).map(get_wav_and_label, num_parallel_calls=AUTOTUNE)
+print("Finished Setting up datasets")
 
 def get_spectrogram(waveform):
     spectrogram = tfio.audio.spectrogram(waveform, nfft=512, window=512, stride=256)
@@ -129,7 +131,7 @@ def split_dataset(full_ds, train_size, test_size):
     return ds_train, ds_val, ds_test
 
 
-BATCH_SIZE = 512
+
 
 DATASET_SIZE = len(X_features)
 
@@ -150,9 +152,10 @@ input_shape = next(iter(spectrogram_train_ds.take(1)))[0].shape
 num_labels = len(jobs_encoder.classes_)
 
 logging.info("Final Touches")
-ds_train = spectrogram_train_ds.cache().batch(BATCH_SIZE).prefetch(AUTOTUNE)
-ds_val = spectrogram_val_ds.cache().batch(BATCH_SIZE).prefetch(AUTOTUNE)
-ds_test = spectrogram_test_ds.cache().batch(BATCH_SIZE).prefetch(AUTOTUNE)
+ds_train = spectrogram_train_ds.cache().prefetch(AUTOTUNE)
+ds_val = spectrogram_val_ds.cache().prefetch(AUTOTUNE)
+ds_test = spectrogram_test_ds.cache().prefetch(AUTOTUNE)
+print("Finished Everything")
 
 model = models.Sequential([
     layers.Input(shape=input_shape),
@@ -170,7 +173,7 @@ model = models.Sequential([
     layers.Dense(32, activation='sigmoid'),
     layers.Dense(num_labels, activation="softmax"),
 ])
-
+print("Finished Compiling")
 model.compile(
     optimizer=tf.keras.optimizers.Adam(),
     loss=tf.keras.losses.CategoricalCrossentropy(),
@@ -179,14 +182,18 @@ model.compile(
 
 EPOCHS = 20
 logging.info("Starting Training")
+print("Starting Training")
 history = model.fit(
     ds_train,
-    validation_data=ds_val,
+    validation_split=0.15,
     epochs=EPOCHS,
+    verbose=2,
+    steps_per_epoch=steps_per_epoch,
+    validation_steps=validation_steps
 )
 
 model.save("data/model_with_padding.h5")
-loss, acc = model.evaluate(ds_test, verbose=2)
+loss, acc = model.evaluate(ds_test, verbose=2, steps=test_steps)
 print(loss)
 print(acc)
 logging.info(f"Loss: {loss}")

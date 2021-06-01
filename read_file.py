@@ -33,4 +33,5 @@ def convert_mp3s_to_wavs(path_to_mp3s: str):
             print(f"Converting {file} to wav. Count: {count} / {n}")
             mp3_sound.export("{0}.wav".format(name), format="wav")
             os.remove(file)
+        count += 1
     print("done")

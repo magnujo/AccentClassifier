@@ -13,6 +13,6 @@ dependencies:
     - opencv-python
     - seaborn
     - pydub
-    - tensorflow
+    - tf-nightly
     - tensorflow_io
     - tensorflow_datasets

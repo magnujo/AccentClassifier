@@ -16,7 +16,7 @@ def find_class_with_maximum_rows(df: DataFrame, label_col: str, allowed_labels: 
     df_lab = df[df[label_col].isin(allowed_labels)]
     group = df_lab.groupby([label_col])
     size = group.size()
-    mean = np.floor(size.mean())
+    mean = 50000
     for lab, _ in group:
         count = size[lab]
         diff = int(np.ceil(mean - count))
@@ -54,11 +54,11 @@ def down_up_sample(path_to_csv: str, save_dir: str, label_col: str, allowed_labe
 
 
 if __name__ == "__main__":
-    res = down_up_sample(r"D:\data\cv-corpus-6.1-2020-12-11\en\df_accent.csv", r"I:\accent_cleaned", "accent",
+    res = down_up_sample(r"D:\data\cv-corpus-6.1-2020-12-11\en\df_accent.csv", r"I:\accent_300K", "accent",
                    ["us", "indian", "england", "canada", "australia"])
-    res.to_csv(r"I:\accent_cleaned\df_accent.csv")
-    # paths = res["path"].tolist()
-    # paths.sort()
-    # extract(paths, r"I:\accent_cleaned", r"C:\Users\hadis\Downloads\en.tar")
-    # convert_mp3s_to_wavs(r"I:\accent_cleaned\cv-corpus-6.1-2020-12-11\en\clips")
+    res.to_csv(r"I:\accent_300K\df_accent.csv")
+    paths = res["path"].tolist()
+    paths.sort()
+    extract(paths, r"I:\accent_300K", r"C:\Users\hadis\Downloads\en.tar")
+    convert_mp3s_to_wavs(r"I:\accent_300K\cv-corpus-6.1-2020-12-11\en\clips")
 
