@@ -1,4 +1,3 @@
-
 from pathlib import Path
 import numpy as np
 import tensorflow as tf
@@ -38,10 +37,10 @@ def draw_amplitude_distribution(audio_data_dir_path: str):
 Da der ikke er plads til intervallerne på x-asken bliver tegningen lidt rodet
 '''
 
+
 def draw_frequency_distribution(audio_data_dir_path: str, n_bins):
     freq_array = collect_all_amplitudes_of_frequencies(audio_data_dir_path)
     plot_array_of_freq_amps(freq_array, n_bins)
-
 
 
 '''
@@ -73,18 +72,28 @@ def collect_all_amplitudes_of_frequencies(audio_data_dir_path: str):
 
     return final
 
+
+def decode_audio(audio_binary):
+    audio, _ = tf.audio.decode_wav(audio_binary)
+    audio = tf.squeeze(audio, axis=-1)
+    return audio
+
+
 '''
     Sums up the amplitudes of frequencies of a single file, and returns it as an array where the index is the frequency. For example
     sum_of_freqamps[1] = sum of 1hz amplitudes
 '''
+
+
 def single_freq_hist(file_path: str):
     path_in_str = file_path
-    audio = tfio.audio.AudioIOTensor(path_in_str)
-    audio_tensor = tf.squeeze(audio.to_tensor(), axis=[-1])
-    tensor = tf.cast(audio_tensor, tf.float32)
-    spectrogram = tfio.audio.spectrogram(tensor, nfft=512, window=512, stride=256)
+    audio = tf.io.read_file(path_in_str)
+    audio = decode_audio(audio)
+    audio = tf.cast(audio, tf.float32)
+    spectrogram = tfio.audio.spectrogram(audio, nfft=512, window=512, stride=256)
     spectrogram = tf.math.log(spectrogram).numpy()
-    spectrogram = np.where(spectrogram == float("-inf"), 0, spectrogram)  # replaces -inf with 0, so the below sum works.
+    spectrogram = np.where(spectrogram == float("-inf"), 0,
+                           spectrogram)  # replaces -inf with 0, so the below sum works.
     sum_of_freqamps = np.sum(spectrogram, axis=0)  # Sums up the frequency amplitudes
     return sum_of_freqamps
 
@@ -122,7 +131,6 @@ def plot_array_of_freq_amps(x, n_bins):
     return d
 
 
-
 '''
 Plotting with i on the x axis 
 '''
@@ -146,7 +154,3 @@ if __name__ == "__main__":
     draw_amplitude_distribution(r"D:\data_small\cv-corpus-6.1-2020-12-11\en\wav")
 
     print("finish")
-
-
-
-
