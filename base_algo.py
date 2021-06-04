@@ -6,13 +6,14 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import audiofunctions
+import matplotlib.pyplot as plt
+
 
 # higher k if dataset is big. k should be odd
 
 def make_path(path, x):
     with_part = path.joinpath(x.part)
     return str(Path(with_part, x.path.replace("mp3", "wav")))
-
 
 
 def knn_accent_PCA(csv_path: str, audio_folder_path: str):
@@ -33,19 +34,12 @@ def knn_accent_PCA(csv_path: str, audio_folder_path: str):
 
     y = df["accent"]
     label_mapping = {
-            'african': 0,
-            'australia': 1,
-            'bermuda': 2,
-            'canada': 3,
-            'england': 4,
-            'hongkong': 5,
-            'indian': 6,
-            'ireland': 7,
-            'malaysia': 8,
-            'philippines': 9,
-            'scotland': 10,
-            'us': 11
-        }
+        'australia': 1,
+        'canada': 2,
+        'england': 3,
+        'indian': 4,
+        'us': 5
+    }
     y = y.map(label_mapping)
     y = np.array(y)
 
@@ -57,14 +51,18 @@ def knn_accent_PCA(csv_path: str, audio_folder_path: str):
     accuracy = metrics.accuracy_score(y_test, prediction)
     print(prediction)
     print(accuracy)
-
-
+    #confusion_matrix = metrics.confusion_matrix(y_test, prediction)
+    metrics.plot_confusion_matrix(knn, X_train, y_train, display_labels=label_mapping.keys())
+    plt.tight_layout()
+    plt.savefig("./figures/CM_KNN_100K.png")
+    plt.show()
 
 '''
 
     audio_folder_path should be the parent folder of the part folders
     the csv file should contain accent, path and part columns
 '''
+
 
 def knn_accent(csv_path: str, audio_folder_path: str):
     df = pd.read_csv(csv_path)
@@ -110,15 +108,7 @@ def knn_accent(csv_path: str, audio_folder_path: str):
     print(accuracy)
 
 
+if __name__ == "__main__":
 
-knn_accent(r"C:\Users\Magnus\Desktop\DM\projekt\Datamining---Audio-\data\data_small\df_accent.csv", r"C:\Users\Magnus\Desktop\DM\projekt\Datamining---Audio-\data\data_small\cv-corpus-6.1-2020-12-11\en")
-
-
-
-
-
-
-
-
-
-
+    knn_accent_PCA(r"D:\data_small\df_accent.csv",
+           r"D:\data_small\cv-corpus-6.1-2020-12-11\en")

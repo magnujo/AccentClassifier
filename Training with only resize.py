@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -7,10 +8,15 @@ from tensorflow.keras import layers
 from tensorflow.keras import models
 import logging
 import tensorflow_hub as hub
+from tensorflow.python.keras.utils.vis_utils import plot_model
 from tensorflow_transform import scale_by_min_max
 import tensorflow_io as tfio
-from test2 import get_wav
+from tools import get_wav
 import tensorflow_datasets as tfds
+from tensorflow.keras.layers.experimental import preprocessing
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 
 def make_path(path, x):
@@ -21,7 +27,7 @@ def make_path(path, x):
 logging.basicConfig(filename='training_without_padding_50.log', level=logging.INFO)
 
 df = pd.read_csv(r"I:\accent_300K\df_accent.csv")
-df = df.sample(frac=1).reset_index(drop=True)
+df = df.sample(n=1000).reset_index(drop=True)
 
 # unique = df["accent"].unique()
 path = Path(r"I:\accent_300K\cv-corpus-6.1-2020-12-11\en")
@@ -32,13 +38,15 @@ jobs_encoder = LabelBinarizer()
 jobs_encoder.fit(df['accent'])
 transformed = jobs_encoder.transform(df['accent'])
 ohe_df = pd.DataFrame(transformed)
-
+classes = jobs_encoder.classes_.tolist()
 X_features = df["path"].to_numpy()
 Y_labels = ohe_df.to_numpy()
 
 X_train, X_testval, Y_train, Y_testval = train_test_split(X_features, Y_labels, train_size=0.7, test_size=0.30)
-X_test, X_val, Y_test, Y_val = train_test_split(X_testval
-                                                , Y_testval, train_size=0.5, test_size=0.50)
+X_test, X_val, Y_test, Y_val = train_test_split(X_testval,
+                                                Y_testval,
+                                                train_size=0.5,
+                                                test_size=0.50)
 
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 print("Finished Setting up paths")
@@ -80,22 +88,22 @@ def make_wav(path, label):
     return wav, label
 
 
-print("Finding Max padding")
-shapes = tfds.as_numpy(all_ds.map(make_wav).map(lambda x, _: tf.shape(x), num_parallel_calls=AUTOTUNE))
+# print("Finding Max padding")
+# shapes = tfds.as_numpy(all_ds.map(make_wav).map(lambda x, _: tf.shape(x), num_parallel_calls=AUTOTUNE))
+#
+# max_padding_size = 0
+# for w in shapes:
+#     max_padding_size = max(max_padding_size, w[0])
+# print("End Finding Max padding")
 
-max_padding_size = 0
-for w in shapes:
-    max_padding_size = max(max_padding_size, w[0])
-print("End Finding Max padding")
-
-BATCH_SIZE = 256
+BATCH_SIZE = 64
 print("Finished Setting up datasets")
 
 
-def add_padding(waveform):
-    waveform = tf.cast(waveform, tf.float32)
-    zero_padding = tf.zeros([max_padding_size] - tf.shape(waveform), dtype=tf.float32)
-    return tf.concat([waveform, zero_padding], 0)
+# def add_padding(waveform):
+#     waveform = tf.cast(waveform, tf.float32)
+#     zero_padding = tf.zeros([max_padding_size] - tf.shape(waveform), dtype=tf.float32)
+#     return tf.concat([waveform, zero_padding], 0)
 
 
 RATE = 16000
@@ -104,9 +112,10 @@ step_time = 0.008
 frame_step = int(RATE * step_time)
 
 
-def preprocess_feature_label(wav, label):
-    wav = add_padding(wav)
-    spectrogram = tfio.audio.spectrogram(wav, nfft=512, window=512, stride=256)
+def preprocess_feature_label(filename, label):
+    #wav = add_padding(wav)
+    wav = get_wav(filename)
+    spectrogram = tfio.audio.spectrogram(wav, nfft=frame_length, window=frame_length, stride=512)
     spectrogram = tf.abs(spectrogram)
     spectrogram = tf.expand_dims(spectrogram, -1)
     spectrogram = scale_by_min_max(spectrogram)
@@ -114,9 +123,9 @@ def preprocess_feature_label(wav, label):
     return spectrogram, label
 
 
-spectrogram_train_ds = files_train_ds.map(make_wav).map(preprocess_feature_label, num_parallel_calls=AUTOTUNE)
-spectrogram_test_ds = files_test_ds.map(make_wav).map(preprocess_feature_label, num_parallel_calls=AUTOTUNE)
-spectrogram_val_ds = files_val_ds.map(make_wav).map(preprocess_feature_label, num_parallel_calls=AUTOTUNE)
+spectrogram_train_ds = files_train_ds.map(preprocess_feature_label, num_parallel_calls=AUTOTUNE)
+spectrogram_test_ds = files_test_ds.map(preprocess_feature_label, num_parallel_calls=AUTOTUNE)
+spectrogram_val_ds = files_val_ds.map(preprocess_feature_label, num_parallel_calls=AUTOTUNE)
 
 DATASET_SIZE = len(X_features)
 
@@ -139,13 +148,11 @@ ds_val = spectrogram_val_ds.batch(BATCH_SIZE).cache().prefetch(AUTOTUNE)
 print("Finished Everything")
 model = models.Sequential([
     layers.Input(shape=input_shape, dtype=tf.float32, name='audio'),
-    layers.Conv2D(32, 3, activation='relu'),
     layers.Conv2D(64, 3, activation='relu'),
     layers.MaxPooling2D(),
-    layers.Dropout(0.25),
+    layers.Conv2D(32, 3, activation='relu'),
+    layers.MaxPooling2D(),
     layers.Flatten(),
-    layers.Dense(128, activation='relu'),
-    layers.Dropout(0.5),
     layers.Dense(num_labels, activation="softmax"),
 ])
 print("Finished Compiling")
@@ -154,7 +161,7 @@ model.compile(
     loss=tf.keras.losses.CategoricalCrossentropy(),
     metrics=['accuracy'],
 )
-
+plot_model(model, to_file="./figures/model2.png", show_shapes=True, show_layer_names=True)
 EPOCHS = 30
 logging.info("Starting Training")
 print("Starting Training")
@@ -162,13 +169,36 @@ history = model.fit(
     ds_train,
     validation_data=ds_val,
     epochs=EPOCHS,
-    verbose=2,
 )
 
 model.save("data/model_without_padding_50.h5")
-ds_test = spectrogram_test_ds.batch(BATCH_SIZE).cache().prefetch(AUTOTUNE)
-loss, acc = model.evaluate(ds_test, verbose=2)
-print(loss)
+
+ds_test = spectrogram_test_ds
+
+test_audio = []
+test_labels = []
+
+for audio, label in ds_test:
+  test_audio.append(audio.numpy())
+  test_labels.append(label.numpy())
+
+test_audio = np.array(test_audio)
+test_labels = np.array(test_labels)
+
+y_pred = np.argmax(model.predict(test_audio), axis=1)
+y_true = np.argmax(test_labels, axis=1)
+
+acc = sum(y_pred == y_true) / len(y_true)
+print(f'Test set accuracy: {acc:.0%}')
+
+confusion_mtx = tf.math.confusion_matrix(y_true, y_pred)
+sns.heatmap(confusion_mtx, xticklabels=classes, yticklabels=classes,
+            annot=True, fmt='g')
+plt.xlabel('Prediction')
+plt.ylabel('Label')
+plt.tight_layout()
+plt.savefig("./figures/CM_50K_trim_only.png")
+
 print(acc)
-logging.info(f"Loss: {loss}")
 logging.info(f"Acc: {acc}")
+plt.show()

@@ -1,3 +1,4 @@
+import math
 from pathlib import Path
 import numpy as np
 import tensorflow as tf
@@ -38,9 +39,13 @@ Da der ikke er plads til intervallerne på x-asken bliver tegningen lidt rodet
 '''
 
 
-def draw_frequency_distribution(audio_data_dir_path: str, n_bins):
+def draw_frequency_distribution(audio_data_dir_path: str, n_bins, pa: str):
     freq_array = collect_all_amplitudes_of_frequencies(audio_data_dir_path)
-    plot_array_of_freq_amps(freq_array, n_bins)
+    d = plot_array_of_freq_amps(freq_array, n_bins)
+    plt.bar(list(d.keys()), d.values())
+    plt.xticks(rotation='vertical')
+    plt.savefig(pa, bbox_inches="tight")
+    #plt.show()
 
 
 '''
@@ -57,7 +62,9 @@ to something similar to train_with_padding.py method.
 def collect_all_amplitudes_of_frequencies(audio_data_dir_path: str):
     final = np.array([])
     path_list = Path(audio_data_dir_path).rglob('*wav')  # r = recursive (all subfolders)
+    count = 1
     for path in path_list:
+        print(f"Count: {count}")
         path_in_str = str(path.resolve())
         audio = tfio.audio.AudioIOTensor(path_in_str)
         audio_tensor = tf.squeeze(audio.to_tensor(), axis=[-1])
@@ -69,6 +76,7 @@ def collect_all_amplitudes_of_frequencies(audio_data_dir_path: str):
         sum_of_freqamps = np.sum(spectrogram, axis=0)  # Sums up the frequency amplitudes
         final = add_arrays_of_different_size(sum_of_freqamps,
                                              final)  # all of the files i tested on has the same size, so maybe not needed? Needs to be tested on more files.
+        count += 1
 
     return final
 
@@ -118,16 +126,13 @@ Plotting with intervals on the x axis
 
 
 def plot_array_of_freq_amps(x, n_bins):
-    freqinterval = len(x) / n_bins
+    freqinterval = math.ceil(len(x) / n_bins)
     split = np.array_split(x, n_bins)
-    print("split", split)
     b = list(map(lambda y: np.sum(y), split))
-    print("b", b)
     d = {}
     for i in range(n_bins):
         k = str(i * freqinterval) + "-" + str((i * freqinterval) + freqinterval)
         d[k] = b[i]
-    print("d", d)
     return d
 
 
@@ -151,6 +156,8 @@ def plot_array_of_freq_amps2(x, n_bins):
 
 
 if __name__ == "__main__":
-    draw_amplitude_distribution(r"D:\data_small\cv-corpus-6.1-2020-12-11\en\wav")
+    draw_frequency_distribution(r"D:\data\cv-corpus-6.1-2020-12-11\en\wav", 15, "./figures/before_sampling_accent.png")
+    draw_frequency_distribution(r"I:\accent_300K\cv-corpus-6.1-2020-12-11\en\clips", 15, "./figures/after_sampling_accent_50K.png")
+    draw_frequency_distribution(r"I:\accent_cleaned\cv-corpus-6.1-2020-12-11\en\clips", 15, "./figures/after_sampling_accent_mean.png")
 
     print("finish")
